@@ -1,0 +1,37 @@
+// RAM init file for demo_counter_ram_seg7
+// 32 × 32-bit words, hex format ($readmemh)
+//
+// Addresses 0..15  (SW[0]=0): hex constants ("dead beef" style)
+DEADBEEF
+CAFEBABE
+12345678
+FEEDC0DE
+8BADF00D
+ABADD00D
+BAADF00D
+B105F00D
+1BADB002
+BADC0FFE
+C00010FF
+FACEFEED
+00C0FFEE
+DEC0FFEE
+F00DBABE
+FACECAFE
+// Addresses 16..31 (SW[0]=1): animation – single "1" sweeps left then right
+00000001
+00000010
+00000100
+00001000
+00010000
+00100000
+01000000
+10000000
+01000000
+00100000
+00010000
+00001000
+00000100
+00000010
+00000001
+00000000

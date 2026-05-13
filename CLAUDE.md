@@ -2,7 +2,7 @@
 
 ## Projektziel
 
-Entwicklung eines vollständigen RISC-V-basierten Mikrocontrollers im Rahmen des Forschungsmasters. Als **CPU-Core** wird der von **LowRISC bereitgestellte Ibex-Core** (OpenTitan) unverändert übernommen. Die gesamte **Peripherie** wird von Grund auf selbst in SystemVerilog geschrieben und muss mit dem LowRISC TL-UL-Bus kompatibel sein.
+Entwicklung eines vollständigen RISC-V-basierten Mikrocontrollers im Rahmen des Forschungsmasters. Als **CPU-Core** wird der von **LowRISC bereitgestellte Ibex-Core** unverändert übernommen (Standalone-Variante, ohne OpenTitan-Wrapper). Die gesamte **Peripherie** wird von Grund auf selbst in SystemVerilog geschrieben und an das **native Ibex-Memory-Interface** angebunden.
 
 ---
 
@@ -40,46 +40,46 @@ Entwicklung eines vollständigen RISC-V-basierten Mikrocontrollers im Rahmen des
 - **ISA:** RV32IMC + optional B, Zcb, Zcmp
 - **Performance:** bis zu 3,13 CoreMarks/MHz
 - **Fläche (min):** ~15 kGates
-- **Projekt:** OpenTitan Earl Grey (Dual-Lockstep-Konfiguration)
-- **Bus-Interface:** Datenspeicher- und Instruktionsspeicher-Interface werden im `rv_core_ibex`-Wrapper auf **TL-UL** gemappt
+- **Bus-Interface:** Natives Ibex-Memory-Protokoll (Request/Grant/Valid-Handshake), getrennt für Instruktions- und Datenseite
 - Repository: [github.com/lowRISC/ibex](https://github.com/lowRISC/ibex)
 
 ---
 
-## TL-UL Bus (TileLink Uncached Lightweight)
+## Ibex Memory-Interface
 
-Alle selbst geschriebenen Peripheriemodule müssen das TL-UL-Interface implementieren. Die Signale sind in zwei Structs organisiert:
+Der Standalone-Ibex exponiert zwei voneinander unabhängige, einfache Memory-Interfaces (kein TileLink, kein AXI). Alle selbst geschriebenen Peripheriemodule werden über einen kleinen Adress-Dekoder hinter diesen Interfaces angesprochen.
 
-### Host → Device (`tl_h2d_t`)
+### Instruction-Interface (read-only)
 
-| Signal | Breite | Beschreibung |
-|---|---|---|
-| `a_valid` | 1 | Request gültig |
-| `a_ready` | 1 | Device bereit (Rückkanal im Handshake) |
-| `a_opcode` | 3 | `Get` (Lesen), `PutFullData`, `PutPartialData` |
-| `a_param` | 3 | Protokollparameter (meist 0) |
-| `a_size` | 2 | Transfergröße (2^n Bytes) |
-| `a_source` | TL_AIW | Request-ID für Response-Routing |
-| `a_address` | TL_AW | Zieladresse |
-| `a_mask` | TL_DBW | Byte-Enable-Maske |
-| `a_data` | TL_DW | Schreibdaten |
-| `a_user` | – | OpenTitan-spezifische User-Bits |
+| Signal | Richtung | Breite | Beschreibung |
+|---|---|---|---|
+| `instr_req_o` | Core → Mem | 1 | Request gültig, bleibt high bis `instr_gnt_i` |
+| `instr_addr_o` | Core → Mem | 32 | Adresse (wortaligniert) |
+| `instr_gnt_i` | Mem → Core | 1 | Request angenommen (1 Takt) |
+| `instr_rvalid_i` | Mem → Core | 1 | Lesedaten gültig |
+| `instr_rdata_i` | Mem → Core | 32 | Gelesene Instruktion |
+| `instr_err_i` | Mem → Core | 1 | Memory-Fehler |
 
-### Device → Host (`tl_d2h_t`)
+### Data-Interface (Load/Store)
 
-| Signal | Breite | Beschreibung |
-|---|---|---|
-| `d_valid` | 1 | Response gültig |
-| `d_ready` | 1 | Host bereit (Rückkanal) |
-| `d_opcode` | 3 | `AccessAck` (Write-ACK), `AccessAckData` (Read-Data) |
-| `d_param` | 3 | Protokollparameter |
-| `d_size` | 2 | Transfergröße |
-| `d_source` | TL_AIW | Gespiegeltes Request-ID |
-| `d_data` | TL_DW | Lesedaten |
-| `d_error` | 1 | Fehlerflag |
-| `d_user` | – | OpenTitan-spezifische User-Bits |
+| Signal | Richtung | Breite | Beschreibung |
+|---|---|---|---|
+| `data_req_o` | Core → Mem | 1 | Request gültig |
+| `data_gnt_i` | Mem → Core | 1 | Request angenommen |
+| `data_we_o` | Core → Mem | 1 | Write Enable |
+| `data_be_o` | Core → Mem | 4 | Byte-Enables |
+| `data_addr_o` | Core → Mem | 32 | Adresse |
+| `data_wdata_o` | Core → Mem | 32 | Schreibdaten |
+| `data_rvalid_i` | Mem → Core | 1 | Lesedaten gültig |
+| `data_rdata_i` | Mem → Core | 32 | Lesedaten |
+| `data_err_i` | Mem → Core | 1 | Memory-Fehler |
 
-Referenz: [OpenTitan TL-UL Spec](https://opentitan.org/book/hw/ip/tlul/)
+### Handshake (zweiphasig)
+
+1. **Request:** Core hält `*_req_o` + Adresse stabil, bis `*_gnt_i` einen Takt high ist. Request wird damit angenommen, der Core darf in derselben oder einer späteren Taktflanke einen Folge-Request starten.
+2. **Response:** Speicher antwortet ≥1 Takt später mit `*_rvalid_i` und den Daten. Mehrere Requests dürfen outstanding sein.
+
+Referenz: [Ibex Load-Store Unit](https://ibex-core.readthedocs.io/en/latest/03_reference/load_store_unit.html), [Ibex Instruction Fetch](https://ibex-core.readthedocs.io/en/latest/03_reference/instruction_fetch.html)
 
 ---
 
@@ -99,11 +99,16 @@ Referenz: [OpenTitan TL-UL Spec](https://opentitan.org/book/hw/ip/tlul/)
 ```
 Forschungsmaster_main/
 ├── lib/               # SystemVerilog-Bibliothek – alle wiederverwendbaren Module (flach)
+│   ├── ibex/          # LowRISC Ibex-Core (git submodule + Filelists)
+│   │   ├── upstream/  # git submodule → github.com/lowRISC/ibex
+│   │   ├── files.f    # Dateiliste für Questa/Simulation
+│   │   └── ibex.tcl  # Vivado-Snippet (source aus build.tcl)
 │   ├── ram/
-│   ├── tl_adapter/
+│   ├── peri_reg/
 │   ├── debouncer/
 │   ├── counter/
 │   ├── seg7/
+│   ├── seg7_periph/
 │   └── …
 └── deployments/       # FPGA-Deployments – je Demo ein eigener Ordner
     ├── demo_memory/
@@ -124,6 +129,7 @@ lib/<modulname>/
 - Module können andere Bibliotheksmodule instanziieren (Kombinationen erlaubt).
 - Jedes Modul ist **eigenständig simulier- und testbar**.
 - Kein Modul in `lib/` enthält FPGA-spezifische Constraints oder Top-Level-Logik.
+- **Ausnahme `lib/ibex/`:** Der Ibex-Core ist ein externes git submodule und folgt nicht dem üblichen `rtl/sim/tb`-Muster. Stattdessen: `upstream/` (submodule), `files.f` (Dateiliste), `ibex.tcl` (Vivado-Snippet). Kein eigener Simulationstest – der Core wird unverändert übernommen.
 
 ### `deployments/` – FPGA-Deployments
 
@@ -154,7 +160,7 @@ deployments/<demo_name>/
 | Modul | Pfad | Beschreibung |
 |---|---|---|
 | RAM | `lib/ram/` | Synchrones Single-Port-RAM, parametrierbar (Breite, Tiefe) |
-| TL-UL Adapter | `lib/tl_adapter/` | Anbindung des RAM an TL-UL (Get / PutFullData / PutPartialData) |
+| Peripherie-Register | `lib/peri_reg/` | Memory-mapped 32-Bit-Register, RW oder READ_ONLY (hw_i-getrieben), Byte-Enables |
 
 ### Phase 2: Demo-Bibliotheksmodule
 
@@ -170,13 +176,21 @@ deployments/<demo_name>/
 |---|---|---|
 | Speicher-Demo | `deployments/demo_memory/` | Counter → RAM → 7-Segment auf Nexys A7-100T |
 
-### Phase 3: Weitere Peripherie (geplant)
+### Phase 3: Ibex-Anbindung (geplant)
+
+| Schritt | Beschreibung |
+|---|---|
+| Ibex-Core | `lib/ibex/` – git submodule, bereits integriert |
+| Ibex-Mem-Adapter | Adapter Ibex-native-Interface ↔ interne Req/We/Be-Signatur (Instruction + Data) |
+| System-Top | Ibex + RAM + Peripherie hinter einem Adressdekoder |
+| FPGA-Deployment | Vollständiges SoC-Demo auf Nexys A7-100T |
+
+### Phase 4: Weitere Peripherie (geplant)
 
 - GPIO-Controller
 - UART
 - Timer / PWM
 - Interrupt-Controller
-- Vollständige Anbindung an LowRISC Ibex-Core
 
 ---
 
@@ -209,4 +223,5 @@ Das TCL-Skript übernimmt: Quellen einbinden, Constraints laden, Synthese, Imple
 - Jede Testbench endet mit `PASS`/`FAIL`-Ausgabe und `$finish`
 - Constraints-Datei: `deployments/<demo>/constraints/Nexys-A7-100T-Master.xdc`
 - Keine proprietären IP-Cores – alles selbst geschrieben (außer LowRISC Ibex-Core)
+- Peripherie-Bus: einfache We/Be/WData/RData-Signatur (siehe `lib/ram`, `lib/peri_reg`); Address-Decoding macht der Parent, `we_i` ist beim Register bereits vorgefiltert. Anbindung an Ibex erfolgt später über einen Adapter auf das native Ibex-Memory-Interface
 - I/O-Standard aller Nexys A7 Pins: **LVCMOS33**

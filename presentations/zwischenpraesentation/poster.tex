@@ -1,0 +1,254 @@
+% =====================================================================
+%  Forschungsmaster - Zwischenpraesentation
+%  RISC-V Mikrocontroller auf FPGA (Nexys A7-100T)
+%
+%  Layout: A1 hochkant (594 x 841 mm, DIN), FHV-Footer-Band
+%  Section 1 ueber volle Breite, Sections 2-4 in 2 Spalten.
+%
+%  TODO-Markierungen vor Druck pruefen.
+% =====================================================================
+\documentclass[25pt]{extarticle}
+
+\usepackage[
+  paperwidth=594mm, paperheight=841mm,
+  left=35mm, right=35mm,
+  top=40mm, bottom=110mm,
+  headsep=0pt
+]{geometry}
+
+\usepackage[ngerman]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, shapes.geometric}
+\usepackage{xcolor}
+\usepackage{multicol}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{eso-pic}
+\usepackage{parskip}
+
+\pagestyle{empty}
+\setlength{\columnsep}{20mm}
+\setlist[itemize]{leftmargin=*, itemsep=4pt, topsep=2pt}
+
+\renewcommand{\normalsize}{\fontsize{28}{36}\selectfont}
+\normalsize
+
+% -----------------------------------------------------------------------
+%  FHV-Farben
+% -----------------------------------------------------------------------
+\definecolor{fhvyellow}{RGB}{255, 222, 80}
+\definecolor{fhvblue}  {RGB}{160, 215, 235}
+\definecolor{fhvsalmon}{RGB}{246, 145, 115}
+\definecolor{fhvpurple}{RGB}{205, 170, 215}
+\definecolor{fhvblack} {RGB}{0,   0,   0}
+
+\colorlet{accentcolor}{fhvyellow}
+\colorlet{accenttext} {black}
+
+% -----------------------------------------------------------------------
+%  Bottom-Band
+% -----------------------------------------------------------------------
+\AddToShipoutPictureBG{%
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[accentcolor]
+      (current page.south west) rectangle
+      ([yshift=80mm]current page.south east);
+
+    \node[anchor=south west, xshift=35mm, yshift=22mm,
+          text=accenttext, align=left, font=\fontsize{28}{34}\selectfont]
+      at (current page.south west)
+      {\textbf{FTM-MEC-VZ-2}\\[3pt]05/2026};
+
+    \node[anchor=south west, xshift=175mm, yshift=22mm,
+          text=accenttext, align=left, font=\fontsize{28}{34}\selectfont]
+      at (current page.south west)
+      {Studierende\\[3pt]\textbf{Tobias Brand}};
+
+    \node[anchor=south west, xshift=320mm, yshift=22mm,
+          text=accenttext, align=left, font=\fontsize{28}{34}\selectfont]
+      at (current page.south west)
+      {Betreuer an der FHV\\[3pt]\textbf{Andre Mitterbacher}};
+
+    \node[anchor=south east, xshift=-35mm, yshift=18mm]
+      at (current page.south east)
+      {\includegraphics[width=95mm]{fhv_logo.png}};
+  \end{tikzpicture}%
+}
+
+% -----------------------------------------------------------------------
+%  Section-Heading
+% -----------------------------------------------------------------------
+\newcommand{\posterheading}[1]{%
+  \par\vspace{8mm}%
+  {\fontsize{44}{52}\selectfont\bfseries #1}%
+  \par\vspace{3mm}%
+  {\color{accentcolor}\rule{\linewidth}{1.5mm}}%
+  \par\vspace{4mm}%
+}
+
+\newcommand{\subheading}[1]{%
+  \par\vspace{3mm}%
+  {\fontsize{32}{38}\selectfont\bfseries #1}\par\vspace{1mm}%
+}
+
+% -----------------------------------------------------------------------
+%  Toolchain-Flowchart (volle Breite)
+% -----------------------------------------------------------------------
+\newcommand{\toolchainflow}{%
+\begin{center}
+\begin{tikzpicture}[
+  every node/.style={font=\fontsize{22}{26}\selectfont},
+  x=14mm, y=14mm,
+  box/.style={draw, line width=0.5mm, rounded corners=2mm, fill=white,
+              minimum width=55mm, minimum height=22mm, align=center,
+              inner sep=2mm},
+  fpgabox/.style={box, fill=accentcolor, minimum width=60mm,
+                  minimum height=30mm},
+  arr/.style={-{Latex[length=4mm]}, line width=0.7mm}
+]
+  % Hardware-Pfad (oben)
+  \node[box] (sv)     at (0,  3) {SystemVerilog};
+  \node[box] (vivado) at (5,  3) {Vivado};
+  \node[box] (bit)    at (10, 3) {Bitstream};
+
+  % Simulation (Mitte)
+  \node[box] (modelsim) at (5, 0) {ModelSim};
+
+  % Software-Pfad (unten)
+  \node[box] (c)        at (0,  -3) {C-Code};
+  \node[box] (compiler) at (5,  -3) {Compiler};
+  \node[box] (binary)   at (10, -3) {Binary};
+
+  % FPGA (rechts mittig)
+  \node[fpgabox] (fpga) at (14.6, 0) {FPGA\\Nexys A7};
+
+  % Hardware-Pfeile
+  \draw[arr] (sv)     -- (vivado);
+  \draw[arr] (vivado) -- (bit);
+  \draw[arr] (bit.east) -| (fpga.north);
+
+  % Software-Pfeile
+  \draw[arr] (c)        -- (compiler);
+  \draw[arr] (compiler) -- (binary);
+  \draw[arr] (binary.east) -| (fpga.south);
+
+  % Simulation-Inputs: SV und Binary
+  \draw[arr] (sv.south east)     -- (modelsim.north west);
+  \draw[arr] (binary.north west) -- (modelsim.south east);
+\end{tikzpicture}
+\end{center}
+}
+
+\begin{document}
+
+% =====================================================================
+%  Titelblock
+% =====================================================================
+{\fontsize{88}{100}\selectfont\bfseries RISC-V Mikrocontroller auf FPGA}\par
+\vspace{4mm}
+{\fontsize{46}{54}\selectfont Zwischenstand des Forschungsmasterprojekts}\par
+\vspace{6mm}
+
+% =====================================================================
+%  Section 1 -- Einstieg (volle Breite)
+% =====================================================================
+\posterheading{1\,~Einstieg}
+
+\subheading{Thema}
+Ein Mikrocontroller ist der kleine Rechner in eingebetteten Ger\"aten --
+er steuert Sensoren, Tasten und Anzeigen. \textbf{RISC-V} ist eine
+offene, lizenzfreie CPU-Architektur und gilt als Zukunftstechnologie.
+Das Projekt baut einen RISC-V-Mikrocontroller auf einem \textbf{FPGA}
+-- einem programmierbaren Chip, in dem Schaltungen frei beschrieben
+werden k\"onnen -- der sp\"ater f\"ur Lehrzwecke eingesetzt werden soll.
+
+\medskip
+\noindent
+\begin{minipage}[t]{0.48\linewidth}
+\subheading{Voraussetzungen}
+\begin{itemize}
+  \item CPU-Kern: \textbf{LowRISC Ibex} (32-Bit RISC-V), unver\"andert
+        \"ubernommen.
+  \item Drumherum (RAM, Register, Anzeige, Eingaben\dots) wird selbst in
+        SystemVerilog entworfen.
+  \item Plattform: \textbf{Digilent Nexys A7-100T} mit Xilinx Artix-7 FPGA.
+\end{itemize}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\linewidth}
+\subheading{Ziel}
+RISC-V und die zugeh\"orige Toolchain als kompletten Lehrbaukasten
+verf\"ugbar machen -- und darauf aufbauend ein eigenes, anspruchsvolles
+Peripherieger\"at entwerfen.
+\end{minipage}
+
+\vspace{4mm}
+{\centering\fontsize{32}{38}\selectfont\bfseries Toolchain\par}
+\vspace{2mm}
+\toolchainflow
+\vspace{-6mm}
+
+% =====================================================================
+%  Sections 2--4 in 2 Spalten
+% =====================================================================
+\begin{multicols}{2}
+
+% ----- 2. Zwischenstand -----------------------------------------------
+\posterheading{2\,~Zwischenstand}
+
+Der Fokus dieser ersten Phase liegt auf \emph{Toolchain aufbauen und
+Grundlagen lernen} -- SystemVerilog, FPGA-Workflow und das
+Ibex-Speicher-Interface.
+
+\smallskip
+\textbf{Bereits umgesetzt:}
+\begin{itemize}
+  \item Eigene Bausteine: \textbf{RAM}, \textbf{memory-mapped Register},
+        \textbf{Tasten-Entpreller}, \textbf{Z\"ahler},
+        \textbf{7-Segment-Anzeige}.
+  \item Drei FPGA-Demos auf der Nexys A7: Z\"ahler $\rightarrow$ Anzeige,
+        Z\"ahler $\leftrightarrow$ RAM $\rightarrow$ Anzeige, und ein
+        erstes Programm auf dem \textbf{Ibex-Core}.
+  \item Jeder Baustein hat eine eigene Testbench mit
+        \texttt{PASS}/\texttt{FAIL}-Ausgabe.
+\end{itemize}
+
+% ----- 3. Quelle ------------------------------------------------------
+\posterheading{3\,~Wichtigste Quelle}
+
+\begin{itemize}
+  \item Patterson, D.\,A.; Hennessy, J.\,L.: \emph{Computer Organization
+        and Design -- RISC-V Edition}, Morgan Kaufmann.
+\end{itemize}
+
+\smallskip
+Da der Fokus aktuell auf Toolchain und Grundlagen liegt, dient das
+Buch als zentrale Referenz.
+
+\columnbreak
+
+% ----- 4. Zeitplan ----------------------------------------------------
+\posterheading{4\,~Zeitplan}
+
+\subheading{Dieses Semester (Forschungsmaster I)}
+\begin{itemize}
+  \item Bibliotheksbausteine + Speicher-Demo \hfill \emph{abgeschlossen}
+  \item Ibex-Anbindung \hfill \emph{abgeschlossen}
+  \item \textbf{C-Toolchain} (Linker-Skript, Startup-Code), damit der
+        MCU mit C programmiert werden kann \hfill \emph{in Arbeit}
+  \item \textbf{UART} als wichtigste Peripherie \hfill \emph{geplant}
+  \item \textbf{Bootloader} f\"ur den eigenen Mikrocontroller
+        \hfill \emph{geplant}
+\end{itemize}
+
+\subheading{Folgesemester (Forschungsmaster II)}
+\begin{itemize}
+  \item Konzeption, Entwurf und Implementierung eines eigenen,
+        anspruchsvollen Peripherieger\"ats.
+\end{itemize}
+
+\end{multicols}
+
+\end{document}

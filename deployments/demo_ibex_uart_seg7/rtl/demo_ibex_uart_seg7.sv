@@ -1,32 +1,31 @@
-// Deployment-Top: Ibex + IMEM + DMEM + Seg7 auf Nexys A7-100T.
+// Deployment-Top: Ibex + IMEM + DMEM + Seg7 + UART auf Nexys A7-100T.
+//
+// Wie demo_ibex_seg7, zusaetzlich ein UART-Peripheriegeraet. Das C-Programm
+// zaehlt hoch, zeigt den Wert auf der 7-Segment-Anzeige UND schickt ihn ueber
+// die USB-UART-Bruecke (115200 8N1) an den PC.
 //
 // Memory map (CPU-Sicht):
-//   0x0000_0000..0x0000_03FC   IMEM     1 KB  read-only, Initialisierung aus imem.mem
-//                                              (Reset-Vektor: 0x0000_0080, Trap-Vektor: 0x0000_0000)
-//   0x0001_0000..0x0001_3FFC   DMEM    16 KB  read/write, Initialisierung aus dmem.mem (0..4095)
-//   0x8000_0000                SEG7    1 reg  write-only nach Logik; 32-Bit-Wert wird auf
-//                                              dem 8-stelligen Hex-Display angezeigt.
+//   0x0000_0000..0x0000_03FC   IMEM     1 KB  read-only, Init aus imem.mem
+//                                              (Reset-Vektor: 0x80, Trap-Vektor: 0x00)
+//   0x0001_0000..0x0001_3FFC   DMEM    16 KB  read/write, Init aus dmem.mem
+//   0x8000_0000                SEG7    1 reg  32-Bit-Wert -> Hex-Display
+//   0x9000_0000                UART_DATA   W: low byte senden / R: empfangenes Byte
+//   0x9000_0004                UART_STATUS R: bit0 tx_ready, bit1 rx_valid, bit2 overrun
 //
-// Bus-Fabric: Ibex hat zwei native Memory-Interfaces (instr / data). Das
-// Fabric ist deshalb winzig (siehe unten "DATA BUS" und "INSTRUCTION BUS"):
-//   * Adress-Dekoder erzeugt pro Slave ein chip-selects (sel_*)
-//   * gnt = req (alle Slaves immer bereit)
-//   * rvalid = req um einen Takt verzoegert (BRAM/peri_reg = 1-cycle read)
-//   * rdata wird gemuxt anhand des registrierten sel-Vektors
-
-module demo_ibex_seg7 (
+// Bus-Fabric: identisch zu demo_ibex_seg7, nur um den UART-Slave erweitert.
+module demo_ibex_uart_seg7 (
     input  logic       clk_i,        // 100 MHz, pin E3
     input  logic       btnc_i,       // BTNC -> async reset (active-HIGH)
 
     output logic [7:0] an_o,         // 7-Segment Anoden, active-LOW
-    output logic [7:0] seg_o         // 7-Segment Segmente {DP,G..A}, active-LOW
+    output logic [7:0] seg_o,        // 7-Segment Segmente {DP,G..A}, active-LOW
+
+    output logic       uart_tx_o,    // USB-UART: FPGA -> PC (Pin C4)
+    input  logic       uart_rx_i     // USB-UART: PC -> FPGA (Pin D4)
 );
 
     // --------------------------------------------------------------------
-    // Reset-Synchronizer
-    //   btnc_i ist asynchron / active-HIGH; Ibex erwartet rst_ni synchron /
-    //   active-LOW. Zwei-FF-Synchronizer auf ~btnc_i: kommt nach Bitstream-
-    //   load (FFs init = 0) automatisch fuer ~2 Takte in Reset hoch.
+    // Reset-Synchronizer (btnc_i async/active-HIGH -> rst_ni sync/active-LOW)
     // --------------------------------------------------------------------
     logic rst_n_meta, rst_ni;
     always_ff @(posedge clk_i) begin
@@ -35,7 +34,7 @@ module demo_ibex_seg7 (
     end
 
     // --------------------------------------------------------------------
-    // Ibex-Signale (clean wires zum verkabeln)
+    // Ibex-Signale
     // --------------------------------------------------------------------
     logic        instr_req;
     logic        instr_gnt;
@@ -82,31 +81,22 @@ module demo_ibex_seg7 (
     // ====================================================================
     //                            INSTRUCTION BUS
     // ====================================================================
-    // Nur ein Slave (IMEM). Daher kein Mux, nur Adresse durchreichen und
-    // gnt/rvalid generieren.
-    //
-    //   IMEM AddrWidth=8 -> 256 Woerter = 1 KB. addr_i ist wortindiziert,
-    //   also instr_addr[9:2] verwenden (untere 2 Bits sind Byte-offset).
-    // --------------------------------------------------------------------
     logic instr_rvalid_q;
     always_ff @(posedge clk_i) begin
         if (!rst_ni) instr_rvalid_q <= 1'b0;
         else         instr_rvalid_q <= instr_req;
     end
 
-    assign instr_gnt    = instr_req;     // immer bereit
+    assign instr_gnt    = instr_req;
     assign instr_rvalid = instr_rvalid_q;
     assign instr_err    = 1'b0;
 
-    // IMEM als XPM-Block-RAM. Funktional identisch zum ram-Modul (1-Takt
-    // synchroner Read, read-only, Init aus imem.mem), aber als XPM-Makro -
-    // nur dafuer erzeugt write_mem_info eine .mmi, die updatemem braucht, um
-    // das Programm spaeter ohne Neu-Synthese in den Bitstream zu patchen.
+    // IMEM als XPM-Block-RAM (ermoeglicht write_mem_info/updatemem).
     xpm_memory_spram #(
         .ADDR_WIDTH_A       (8),
-        .MEMORY_SIZE        (256 * 32),     // Tiefe * Breite [bit] = 256 Woerter
+        .MEMORY_SIZE        (256 * 32),
         .MEMORY_PRIMITIVE   ("block"),
-        .MEMORY_INIT_FILE   ("imem.mem"),   // $readmemh-Format wie bisher
+        .MEMORY_INIT_FILE   ("imem.mem"),
         .WRITE_DATA_WIDTH_A (32),
         .READ_DATA_WIDTH_A  (32),
         .BYTE_WRITE_WIDTH_A (32),
@@ -115,7 +105,7 @@ module demo_ibex_seg7 (
     ) u_imem (
         .clka           (clk_i),
         .ena            (instr_req),
-        .wea            (1'b0),             // read-only
+        .wea            (1'b0),
         .addra          (instr_addr[9:2]),
         .dina           (32'h0),
         .douta          (instr_rdata),
@@ -131,36 +121,38 @@ module demo_ibex_seg7 (
     // ====================================================================
     //                              DATA BUS
     // ====================================================================
-    // Zwei Slaves:
-    //   DMEM @ 0x0001_0000..0x0001_3FFC  (16 KB)   -> Vergleich auf addr[31:14] == 18'h00004
-    //   SEG7 @ 0x8000_0000               (1 Reg)   -> Vergleich auf addr[31:28] == 4'h8
-    //
-    // gnt = req (alle Slaves sind immer bereit).
-    // rvalid = req_q1 (BRAM/peri_reg liefern rdata einen Takt spaeter).
-    // rdata = sel_q1-gemuxt aus den jeweiligen Slave-Ausgaengen.
+    // Drei Slaves:
+    //   DMEM @ 0x0001_0000..0x0001_3FFC  -> addr[31:14] == 18'h00004
+    //   SEG7 @ 0x8000_0000               -> addr[31:28] == 4'h8
+    //   UART @ 0x9000_0000               -> addr[31:28] == 4'h9, Reg = addr[3:2]
     // --------------------------------------------------------------------
     logic sel_dmem;
     logic sel_seg7;
+    logic sel_uart;
     assign sel_dmem = (data_addr[31:14] == 18'h00004);
     assign sel_seg7 = (data_addr[31:28] ==  4'h8);
+    assign sel_uart = (data_addr[31:28] ==  4'h9);
 
-    // Per-Slave Requests
     logic dmem_req;
     logic seg7_req;
+    logic uart_req;
     assign dmem_req = data_req & sel_dmem;
     assign seg7_req = data_req & sel_seg7;
+    assign uart_req = data_req & sel_uart;
 
     // 1-Takt verzoegerter sel-Vektor fuer den Read-Data-Mux
-    logic sel_dmem_q, sel_seg7_q;
+    logic sel_dmem_q, sel_seg7_q, sel_uart_q;
     logic data_rvalid_q;
     always_ff @(posedge clk_i) begin
         if (!rst_ni) begin
             sel_dmem_q    <= 1'b0;
             sel_seg7_q    <= 1'b0;
+            sel_uart_q    <= 1'b0;
             data_rvalid_q <= 1'b0;
         end else begin
             sel_dmem_q    <= dmem_req;
             sel_seg7_q    <= seg7_req;
+            sel_uart_q    <= uart_req;
             data_rvalid_q <= data_req;
         end
     end
@@ -168,6 +160,7 @@ module demo_ibex_seg7 (
     // Slave-Ausgaben
     logic [31:0] dmem_rdata;
     logic [31:0] seg7_rdata;
+    logic [31:0] uart_rdata;
 
     ram #(
         .DataWidth (32),
@@ -178,7 +171,7 @@ module demo_ibex_seg7 (
         .req_i   (dmem_req),
         .we_i    (data_we),
         .be_i    (data_be),
-        .addr_i  (data_addr[13:2]),     // 12-bit Wortindex
+        .addr_i  (data_addr[13:2]),
         .wdata_i (data_wdata),
         .rdata_o (dmem_rdata)
     );
@@ -195,12 +188,29 @@ module demo_ibex_seg7 (
         .seg_o
     );
 
+    uart_periph #(
+        .ClkFreq  (100_000_000),
+        .BaudRate (115_200)
+    ) u_uart (
+        .clk_i,
+        .rst_ni,
+        .req_i   (uart_req),
+        .we_i    (data_we),
+        .be_i    (data_be),
+        .addr_i  (data_addr[3:2]),     // Register-Auswahl (DATA=0, STATUS=1)
+        .wdata_i (data_wdata),
+        .rdata_o (uart_rdata),
+        .tx_o    (uart_tx_o),
+        .rx_i    (uart_rx_i)
+    );
+
     // Read-Data-Mux (1-Takt nach dem Request)
     assign data_gnt    = data_req;
     assign data_rvalid = data_rvalid_q;
     assign data_err    = 1'b0;
     assign data_rdata  = sel_dmem_q ? dmem_rdata :
                          sel_seg7_q ? seg7_rdata :
+                         sel_uart_q ? uart_rdata :
                                       32'h0;
 
 endmodule

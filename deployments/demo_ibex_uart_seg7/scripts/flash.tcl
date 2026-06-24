@@ -5,11 +5,11 @@
 # Voraussetzung: build.tcl wurde vorher gelaufen (Bitstream + MCS in out/).
 #
 # Run:
-#   vivado -mode batch -source deployments/demo_ibex_seg7/scripts/flash.tcl
+#   vivado -mode batch -source deployments/demo_ibex_uart_seg7/scripts/flash.tcl
 
 set script_dir [file dirname [file normalize [info script]]]
 set deploy_dir [file dirname $script_dir]
-set top        demo_ibex_seg7
+set top        demo_ibex_uart_seg7
 set mcs_file   $deploy_dir/out/$top.mcs
 
 if {![file exists $mcs_file]} {

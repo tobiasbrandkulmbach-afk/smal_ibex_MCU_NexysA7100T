@@ -1,7 +1,7 @@
-# Vivado non-project batch build for demo_ibex_seg7.
+# Vivado non-project batch build for demo_ibex_uart_seg7.
 # Run from anywhere:
-#   vivado -mode batch -source deployments/demo_ibex_seg7/scripts/build.tcl
-# Output bitstream: deployments/demo_ibex_seg7/out/demo_ibex_seg7.bit
+#   vivado -mode batch -source deployments/demo_ibex_uart_seg7/scripts/build.tcl
+# Output bitstream: deployments/demo_ibex_uart_seg7/out/demo_ibex_uart_seg7.bit
 
 set script_dir   [file dirname [file normalize [info script]]]
 set deploy_dir   [file dirname $script_dir]
@@ -11,7 +11,7 @@ set out_dir      $deploy_dir/out
 
 file mkdir $out_dir
 
-set top  demo_ibex_seg7
+set top  demo_ibex_uart_seg7
 set part xc7a100tcsg324-1
 
 # --- Library sources -----------------------------------------------------
@@ -24,6 +24,9 @@ read_verilog -sv $lib_dir/ram/rtl/ram.sv
 read_verilog -sv $lib_dir/peri_reg/rtl/peri_reg.sv
 read_verilog -sv $lib_dir/seg7/rtl/seg7.sv
 read_verilog -sv $lib_dir/seg7_periph/rtl/seg7_periph.sv
+read_verilog -sv $lib_dir/uart_tx/rtl/uart_tx.sv
+read_verilog -sv $lib_dir/uart_rx/rtl/uart_rx.sv
+read_verilog -sv $lib_dir/uart_periph/rtl/uart_periph.sv
 
 # --- Deployment top ------------------------------------------------------
 read_verilog -sv $deploy_dir/rtl/$top.sv

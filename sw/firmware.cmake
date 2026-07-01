@@ -34,24 +34,30 @@ function(add_firmware name)
         -nostartfiles -nostdlib
         -T ${LINKER_SCRIPT}
         -Wl,--gc-sections
-        -Wl,--no-warn-rwx-segments   # .data-Ladeabbild liegt im IMEM neben dem Code
         -Wl,-Map=${name}.map
         -march=${RISCV_ARCH} -mabi=${RISCV_ABI} -mno-relax)
 
     # imem.mem / dmem.mem als echte CMake-Outputs fuehren: dadurch werden sie
     # automatisch neu erzeugt, sobald sie fehlen ODER die ELF neuer ist - auch
     # bei einem ganz normalen "cmake --build" (kein --clean-first noetig).
+    # Harvard-Trennung: IMEM = nur Code (.text), DMEM = alle Daten
+    # (.rodata + .data). Beide Speicher werden getrennt als Roh-Binary aus der
+    # ELF extrahiert (je Sektion an ihrer Ladeadresse) und in ein $readmemh-
+    # Abbild gewandelt. .bss ist NOLOAD und wird von crt0 zur Laufzeit genullt.
     add_custom_command(
         OUTPUT  ${MEM_OUTPUT_DIR}/imem.mem ${MEM_OUTPUT_DIR}/dmem.mem
         DEPENDS ${name}
-        COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${name}> ${name}.bin
+        COMMAND ${CMAKE_OBJCOPY} -O binary -j .text
+                $<TARGET_FILE:${name}> ${name}_imem.bin
+        COMMAND ${CMAKE_OBJCOPY} -O binary -j .rodata -j .data
+                $<TARGET_FILE:${name}> ${name}_dmem.bin
         COMMAND ${Python3_EXECUTABLE} ${SW_COMMON_DIR}/bin2mem.py
-                ${name}.bin -o ${MEM_OUTPUT_DIR}/imem.mem --words ${IMEM_WORDS}
+                ${name}_imem.bin -o ${MEM_OUTPUT_DIR}/imem.mem --words ${IMEM_WORDS}
         COMMAND ${Python3_EXECUTABLE} ${SW_COMMON_DIR}/bin2mem.py
-                --zero      -o ${MEM_OUTPUT_DIR}/dmem.mem --words ${DMEM_WORDS}
+                ${name}_dmem.bin -o ${MEM_OUTPUT_DIR}/dmem.mem --words ${DMEM_WORDS}
         COMMAND ${CMAKE_OBJDUMP} -d -S $<TARGET_FILE:${name}> > ${name}.lst
         COMMAND ${CMAKE_SIZE} $<TARGET_FILE:${name}>
-        BYPRODUCTS ${name}.bin ${name}.lst
+        BYPRODUCTS ${name}_imem.bin ${name}_dmem.bin ${name}.lst
         COMMENT "Erzeuge ${MEM_OUTPUT_DIR}/imem.mem + dmem.mem fuer ${name}")
 
     # ALL-Target, das die .mem-Outputs einfordert -> bei jedem Build geprueft.

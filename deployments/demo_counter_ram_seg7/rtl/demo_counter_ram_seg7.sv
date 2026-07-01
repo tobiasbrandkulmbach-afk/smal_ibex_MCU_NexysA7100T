@@ -63,7 +63,7 @@ module demo_counter_ram_seg7 (
     );
 
     // Hex display
-    seg7 u_seg7 (
+    seg7_hex u_seg7 (
         .clk_i,
         .rst_ni,
         .value_i (ram_data),

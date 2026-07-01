@@ -9,13 +9,26 @@
 
 #include <stdint.h>
 
-/* --- 7-Segment-Anzeige @ 0x8000_0000 ----------------------------------- */
+/* --- 7-Segment-Zeichenanzeige @ 0x8000_0000 ---------------------------- *
+ * Zwei Register mit je 4 ASCII-Zeichen (Hardware-Font in lib/seg7):
+ *   SEG7_LO: Byte0 = Stelle 0 (AN0, rechts) .. Byte3 = Stelle 3
+ *   SEG7_HI: Byte0 = Stelle 4             .. Byte3 = Stelle 7 (AN7, links)
+ */
 #define SEG7_BASE  0x80000000u
-#define SEG7       (*(volatile uint32_t *)SEG7_BASE)
+#define SEG7_LO    (*(volatile uint32_t *)(SEG7_BASE + 0x0))
+#define SEG7_HI    (*(volatile uint32_t *)(SEG7_BASE + 0x4))
 
-static inline void seg7_write(uint32_t value)
+/* 32-Bit-Wert als 8 Hex-Ziffern anzeigen (Stelle 0 = niederwertigstes Nibble). */
+static inline void seg7_show_hex32(uint32_t v)
 {
-    SEG7 = value;
+    static const char hexd[] = "0123456789ABCDEF";
+    uint32_t lo = 0, hi = 0;
+    for (int i = 0; i < 4; i++) {
+        lo |= (uint32_t)(uint8_t)hexd[(v >> (i * 4)) & 0xF] << (i * 8);
+        hi |= (uint32_t)(uint8_t)hexd[(v >> ((i + 4) * 4)) & 0xF] << (i * 8);
+    }
+    SEG7_LO = lo;
+    SEG7_HI = hi;
 }
 
 /* --- UART @ 0x9000_0000 ------------------------------------------------- */

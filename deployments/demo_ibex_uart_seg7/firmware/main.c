@@ -20,6 +20,8 @@ static void delay(volatile uint32_t loops)
 /* 32-Bit-Wert als 8-stellige Hex-Zahl + CRLF senden. */
 static void uart_put_hex32(uint32_t v)
 {
+    uart_putc('0');
+    uart_putc('x');
     static const char hex[] = "0123456789ABCDEF";
     for (int i = 7; i >= 0; i--) {
         uart_putc(hex[(v >> (i * 4)) & 0xF]);
@@ -35,7 +37,7 @@ int main(void)
     uart_puts("demo_ibex_uart_seg7\r\n");
 
     for (;;) {
-        seg7_write(value);       /* auf der 7-Segment-Anzeige */
+        seg7_show_hex32(value);  /* auf der 7-Segment-Anzeige */
         uart_put_hex32(value);   /* und ueber UART an den PC   */
         value++;
         delay(2000000u);         /* ~0,1 s sichtbar bei 100 MHz */

@@ -4,8 +4,8 @@
 //   0x0000_0000..0x0000_03FC   IMEM     1 KB  read-only, Initialisierung aus imem.mem
 //                                              (Reset-Vektor: 0x0000_0080, Trap-Vektor: 0x0000_0000)
 //   0x0001_0000..0x0001_3FFC   DMEM    16 KB  read/write, Initialisierung aus dmem.mem (0..4095)
-//   0x8000_0000                SEG7    1 reg  write-only nach Logik; 32-Bit-Wert wird auf
-//                                              dem 8-stelligen Hex-Display angezeigt.
+//   0x8000_0000/0x8000_0004    SEG7    2 regs je 4 ASCII-Zeichen (Hardware-Font);
+//                                              Reg-Auswahl ueber addr[2] (AN0..AN7).
 //
 // Bus-Fabric: Ibex hat zwei native Memory-Interfaces (instr / data). Das
 // Fabric ist deshalb winzig (siehe unten "DATA BUS" und "INSTRUCTION BUS"):
@@ -133,7 +133,7 @@ module demo_ibex_seg7 (
     // ====================================================================
     // Zwei Slaves:
     //   DMEM @ 0x0001_0000..0x0001_3FFC  (16 KB)   -> Vergleich auf addr[31:14] == 18'h00004
-    //   SEG7 @ 0x8000_0000               (1 Reg)   -> Vergleich auf addr[31:28] == 4'h8
+    //   SEG7 @ 0x8000_0000/0x8000_0004   (2 Regs)  -> addr[31:28] == 4'h8, Reg = addr[2]
     //
     // gnt = req (alle Slaves sind immer bereit).
     // rvalid = req_q1 (BRAM/peri_reg liefern rdata einen Takt spaeter).
@@ -189,6 +189,7 @@ module demo_ibex_seg7 (
         .req_i   (seg7_req),
         .we_i    (data_we),
         .be_i    (data_be),
+        .addr_i  (data_addr[2]),      // 0 = CHARS_LO, 1 = CHARS_HI
         .wdata_i (data_wdata),
         .rdata_o (seg7_rdata),
         .an_o,

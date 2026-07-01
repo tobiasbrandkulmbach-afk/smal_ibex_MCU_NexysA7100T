@@ -45,7 +45,7 @@ module demo_counter_seg7 (
     );
 
     // Hex display, no DP, no blanking
-    seg7 u_seg7 (
+    seg7_hex u_seg7 (
         .clk_i,
         .rst_ni,
         .value_i (count),

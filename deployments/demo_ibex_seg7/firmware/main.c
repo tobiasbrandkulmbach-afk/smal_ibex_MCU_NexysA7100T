@@ -20,7 +20,7 @@ int main(void)
     uint32_t value = 0;
 
     for (;;) {
-        seg7_write(value);
+        seg7_show_hex32(value);
         value++;
         delay(2000000u);   /* bei 100 MHz grob ~0,1 s sichtbar */
     }

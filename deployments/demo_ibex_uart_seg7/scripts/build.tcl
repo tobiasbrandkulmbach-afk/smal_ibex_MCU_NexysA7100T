@@ -34,8 +34,11 @@ read_verilog -sv $deploy_dir/rtl/$top.sv
 # --- Physical constraints ------------------------------------------------
 read_xdc $deploy_dir/constraints/Nexys-A7-100T-Master.xdc
 
-# cd into deploy_dir so $readmemh("imem.mem"/"dmem.mem") resolves
-cd $deploy_dir
+# Vivado schreibt Nebenprodukte (clockInfo.txt, tight_setup_hold_pins.txt,
+# .Xil/, Journale) ins aktuelle Verzeichnis. Deshalb in den (gitignored)
+# out/-Ordner wechseln und die .mem-Dateien fuer $readmemh dorthin spiegeln.
+foreach _m [glob -nocomplain $deploy_dir/*.mem] { file copy -force $_m $out_dir }
+cd $out_dir
 
 # --- Synthesis + implementation ------------------------------------------
 synth_design -top $top -part $part

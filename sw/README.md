@@ -7,7 +7,7 @@ Deployment (`deployments/<demo>/firmware/`).
 
 ```
 sw/
-├── crt0.S          # C-Runtime-Startup: Stack, .data kopieren, .bss nullen, main()
+├── crt0.S          # C-Runtime-Startup: Stack setzen, .bss nullen, main()
 ├── bin2mem.py      # .bin (objcopy) → $readmemh-Format (.mem)
 └── firmware.cmake  # add_firmware()-Funktion (von Deployments inkludiert)
 ```
@@ -39,7 +39,8 @@ Ergebnis:
 - `deployments/demo_ibex_seg7/imem.mem` / `dmem.mem`  (ins Deployment geschrieben)
 - im `build/`-Ordner zusätzlich `firmware.elf`, `firmware.lst` (Disassembly),
   `firmware.map` (Symbole). Die `size`-Ausgabe am Ende zeigt `text`/`data`/`bss`
-  – `text + data` muss in den IMEM passen, sonst bricht `bin2mem.py` ab.
+  – `.text` muss in den IMEM passen, `.rodata`+`.data`+`.bss`+Stack ins DMEM,
+  sonst bricht `bin2mem.py` bzw. der Linker ab.
 
 Danach Bitstream bauen wie gewohnt:
 
@@ -61,13 +62,24 @@ Deployment-CMakeLists muss vor dem `include` folgende Variablen setzen:
 
 ## Speicher-Layout (vom Linker-Script gesteuert)
 
+**Echte Harvard-Trennung:** IMEM enthält nur Code, DMEM alle Daten. Der
+Daten-Bus des Ibex greift nie aufs IMEM zu. Beide Speicher werden getrennt
+per `objcopy -j <section>` aus der ELF extrahiert und über `imem.mem` /
+`dmem.mem` beim FPGA-Bitstream (`$readmemh`) initialisiert.
+
 | C-Konstrukt | Section | liegt in | in welcher `.mem` |
 |---|---|---|---|
 | Code, Funktionen | `.text` | IMEM | `imem.mem` |
-| `const`, String-Literale | `.rodata` | IMEM | `imem.mem` |
-| globale Variablen mit Initialwert | `.data` | DMEM (Init-Wert im IMEM) | Init-Wert in `imem.mem` |
+| `const`, String-Literale | `.rodata` | DMEM | `dmem.mem` |
+| globale Variablen mit Initialwert | `.data` | DMEM | `dmem.mem` |
 | globale Variablen ohne/0-Init | `.bss` | DMEM | – (von `crt0` genullt) |
 | lokale Variablen, Stack | – | DMEM | – (Laufzeit) |
 
-`crt0.S` kopiert beim Start `.data` vom IMEM-Ladeabbild ins DMEM und nullt
-`.bss`, bevor `main()` aufgerufen wird.
+`crt0.S` nullt nur noch `.bss` und ruft dann `main()` auf – rodata und
+initialisierte `.data`-Globals sind bereits resident im DMEM (kein Copy).
+
+> **Reset-Hinweis:** Da `.data`/rodata nur bei der FPGA-Konfiguration
+> (BRAM-Init aus `dmem.mem`) gesetzt werden, setzt ein **Warm-Reset (BTNC)**
+> veränderte globale `.data`-Variablen *nicht* auf ihren Initialwert zurück.
+> Für echtes Re-Init bei jedem Reset müsste man zum crt0-Copy-Muster
+> (Init-Abbild im IMEM) zurückkehren.

@@ -8,7 +8,7 @@
 //   0x0000_0000..0x0000_03FC   IMEM     1 KB  read-only, Init aus imem.mem
 //                                              (Reset-Vektor: 0x80, Trap-Vektor: 0x00)
 //   0x0001_0000..0x0001_3FFC   DMEM    16 KB  read/write, Init aus dmem.mem
-//   0x8000_0000                SEG7    1 reg  32-Bit-Wert -> Hex-Display
+//   0x8000_0000/0x8000_0004    SEG7    2 regs je 4 ASCII-Zeichen (Font, AN0..AN7)
 //   0x9000_0000                UART_DATA   W: low byte senden / R: empfangenes Byte
 //   0x9000_0004                UART_STATUS R: bit0 tx_ready, bit1 rx_valid, bit2 overrun
 //
@@ -92,6 +92,9 @@ module demo_ibex_uart_seg7 (
     assign instr_err    = 1'b0;
 
     // IMEM als XPM-Block-RAM (ermoeglicht write_mem_info/updatemem).
+    // Single-Port, nur am Instruktions-Bus: der Daten-Bus greift NIE aufs
+    // IMEM zu. rodata und .data liegen (per Linker-Script) resident im DMEM
+    // und werden dort ueber dmem.mem initialisiert -> echte Harvard-Trennung.
     xpm_memory_spram #(
         .ADDR_WIDTH_A       (8),
         .MEMORY_SIZE        (256 * 32),
@@ -121,9 +124,9 @@ module demo_ibex_uart_seg7 (
     // ====================================================================
     //                              DATA BUS
     // ====================================================================
-    // Drei Slaves:
+    // Drei Slaves (der Daten-Bus greift NIE aufs IMEM zu):
     //   DMEM @ 0x0001_0000..0x0001_3FFC  -> addr[31:14] == 18'h00004
-    //   SEG7 @ 0x8000_0000               -> addr[31:28] == 4'h8
+    //   SEG7 @ 0x8000_0000/0x8000_0004   -> addr[31:28] == 4'h8, Reg = addr[2]
     //   UART @ 0x9000_0000               -> addr[31:28] == 4'h9, Reg = addr[3:2]
     // --------------------------------------------------------------------
     logic sel_dmem;
@@ -182,6 +185,7 @@ module demo_ibex_uart_seg7 (
         .req_i   (seg7_req),
         .we_i    (data_we),
         .be_i    (data_be),
+        .addr_i  (data_addr[2]),      // 0 = CHARS_LO, 1 = CHARS_HI
         .wdata_i (data_wdata),
         .rdata_o (seg7_rdata),
         .an_o,

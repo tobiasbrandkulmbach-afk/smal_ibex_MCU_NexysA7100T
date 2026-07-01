@@ -1,0 +1,19 @@
+  # Reine Logik-Demo (kein Prozessor/keine Firmware). Der RAM-Inhalt kommt aus
+  # anim.mem (per $readmemh beim Bitstream) -> keine CMake-Schritte.
+  # Vivado-Aufrufe aus out/ starten, damit alle Nebendateien (vivado.jou/.log,
+  # clockInfo.txt, .Xil/, ...) in out/ landen und nicht im Deployment-/Hauptordner.
+
+  source ~/AMD/2025.2/Vivado/settings64.sh
+  mkdir -p deployments/demo_counter_ram_seg7/out && cd deployments/demo_counter_ram_seg7/out
+
+  # 1) Vivado-Vollbuild -> out/demo_counter_ram_seg7.{bit,mcs}
+  vivado -mode batch -source ../scripts/build.tcl
+
+  # 2a) Auf das Board per JTAG (fluechtig)
+  vivado -mode batch -source ../scripts/program.tcl
+  # 2b) ODER in den QSPI-Flash (JP1 auf JTAG, autonomer Boot)
+  vivado -mode batch -source ../scripts/flash.tcl
+  cd - >/dev/null
+
+  # Verhalten: Der Zaehler adressiert das RAM; der gelesene Wert wird als
+  #            Hex auf der 8-stelligen 7-Segment-Anzeige gezeigt (via seg7_hex).

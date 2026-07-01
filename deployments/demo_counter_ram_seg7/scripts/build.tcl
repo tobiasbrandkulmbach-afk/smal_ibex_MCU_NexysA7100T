@@ -19,16 +19,28 @@ read_verilog -sv $lib_dir/debouncer/rtl/debouncer.sv
 read_verilog -sv $lib_dir/counter/rtl/counter.sv
 read_verilog -sv $lib_dir/ram/rtl/ram.sv
 read_verilog -sv $lib_dir/seg7/rtl/seg7.sv
+read_verilog -sv $lib_dir/seg7_hex/rtl/seg7_hex.sv
 read_verilog -sv $deploy_dir/rtl/$top.sv
 
 # Physical constraints
 read_xdc $deploy_dir/constraints/Nexys-A7-100T-Master.xdc
 
-# cd into deploy_dir so $readmemh("anim.mem") resolves correctly
-cd $deploy_dir
+# Vivado schreibt Nebenprodukte (clockInfo.txt, tight_setup_hold_pins.txt,
+# .Xil/, Journale) ins aktuelle Verzeichnis. Deshalb in den (gitignored)
+# out/-Ordner wechseln und die .mem-Dateien fuer $readmemh dorthin spiegeln.
+foreach _m [glob -nocomplain $deploy_dir/*.mem] { file copy -force $_m $out_dir }
+cd $out_dir
 
 # Synthesis + implementation
 synth_design -top $top -part $part
+
+# Bitstream-Konfig fuer QSPI-Boot von der Nexys A7 (Spansion S25FL128S, x4 @33 MHz).
+set_property CONFIG_VOLTAGE                 3.3   [current_design]
+set_property CFGBVS                         VCCO  [current_design]
+set_property BITSTREAM.CONFIG.SPI_BUSWIDTH  4     [current_design]
+set_property BITSTREAM.CONFIG.CONFIGRATE    33    [current_design]
+set_property BITSTREAM.CONFIG.SPI_FALL_EDGE YES   [current_design]
+
 opt_design
 place_design
 route_design
@@ -41,4 +53,11 @@ report_drc            -file $out_dir/drc.rpt
 # Bitstream
 write_bitstream -force $out_dir/$top.bit
 
-puts "Build complete -> $out_dir/$top.bit"
+# Flash-Image (.mcs) fuer den QSPI-Konfig-Flash der Nexys A7 (autonomer Boot).
+write_cfgmem -force -format mcs -interface SPIx4 -size 16 \
+    -loadbit "up 0x0 $out_dir/$top.bit" \
+    -file $out_dir/$top.mcs
+
+puts "Build complete:"
+puts "  Bitstream:   $out_dir/$top.bit"
+puts "  Flash-Image: $out_dir/$top.mcs"

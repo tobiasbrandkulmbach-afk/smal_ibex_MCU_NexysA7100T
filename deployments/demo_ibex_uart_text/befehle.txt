@@ -1,0 +1,28 @@
+  # 1) Firmware bauen -> schreibt deployments/demo_ibex_uart_text/imem.mem + dmem.mem
+  cd deployments/demo_ibex_uart_text/firmware
+  cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=../../../toolchain/riscv-toolchain.cmake
+  cmake --build build
+  cd -
+
+  # 2) Vivado-Aufrufe aus out/ starten -> Bitstream UND alle Vivado-Nebendateien
+  #    (vivado.jou/.log, clockInfo.txt, .Xil/, ...) landen in out/.
+  source ~/AMD/2025.2/Vivado/settings64.sh
+  mkdir -p deployments/demo_ibex_uart_text/out && cd deployments/demo_ibex_uart_text/out
+
+  #    Vollbuild -> out/demo_ibex_uart_text.{bit,mcs,mmi,dcp}
+  vivado -mode batch -source ../scripts/build.tcl
+
+  # 3a) Auf das Board per JTAG (fluechtig)
+  vivado -mode batch -source ../scripts/program.tcl
+  # 3b) ODER in den QSPI-Flash (JP1 auf JTAG, autonomer Boot)
+  vivado -mode batch -source ../scripts/flash.tcl
+  cd - >/dev/null
+
+  # 4) Schneller Programm-Wechsel ohne Synthese (nur nach Schritt 1+2)
+  cd deployments/demo_ibex_uart_text/out
+  ../scripts/update_mem.sh
+  vivado -mode batch -source ../scripts/program.tcl
+  cd - >/dev/null
+
+  # 5) Zeichen senden -> erscheinen rechts (AN0) und scrollen nach links
+  screen /dev/ttyUSB1 115200          # einfach tippen
